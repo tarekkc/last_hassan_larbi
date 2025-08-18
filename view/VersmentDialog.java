@@ -3,6 +3,7 @@ package com.yourcompany.clientmanagement.view;
 import com.yourcompany.clientmanagement.model.Versment;
 import com.yourcompany.clientmanagement.model.Client;
 import com.yourcompany.clientmanagement.controller.ClientController;
+import com.yourcompany.clientmanagement.controller.VersmentController;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,8 +25,10 @@ public class VersmentDialog extends JDialog {
     private boolean confirmed = false;
     private Versment versment;
     private ClientController clientController;
+    private VersmentController versmentController;
     private List<ClientItem> allClientItems;
     private DefaultComboBoxModel<ClientItem> clientModel;
+    private JLabel remainingAmountLabel;
 
     // Helper class for client combo box
     private static class ClientItem {
@@ -50,6 +53,7 @@ public class VersmentDialog extends JDialog {
         super(parent, title, true);
         this.versment = versment;
         this.clientController = new ClientController();
+        this.versmentController = new VersmentController();
         initializeUI();
         populateFields();
     }
@@ -90,6 +94,7 @@ public class VersmentDialog extends JDialog {
             if (!clientComboBox.isPopupVisible() && clientComboBox.getSelectedItem() instanceof ClientItem) {
                 ClientItem selected = (ClientItem) clientComboBox.getSelectedItem();
                 searchField.setText(selected.toString());
+                updateRemainingAmount(selected.getClient().getId());
             }
         });
 
@@ -100,9 +105,24 @@ public class VersmentDialog extends JDialog {
 
         loadClients();
 
+        // Remaining amount display
+        remainingAmountLabel = new JLabel("Montant restant: -- DA");
+        remainingAmountLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        remainingAmountLabel.setForeground(new Color(46, 125, 50));
+        formPanel.add(new JLabel("Info:"));
+        formPanel.add(remainingAmountLabel);
+
         // Amount field
         addFormField(formPanel, "Montant*:", montantField = new JTextField());
         addNumericValidation(montantField);
+        
+        // Add listener to update remaining amount when amount changes
+        montantField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                updateRemainingAmountPreview();
+            }
+        });
 
         // Type field
         addFormField(formPanel, "Type*:", typeComboBox = new JComboBox<>());
@@ -191,6 +211,10 @@ public class VersmentDialog extends JDialog {
         for (ClientItem item : allClientItems) {
             clientModel.addElement(item);
         }
+                // Update remaining amount if this is the only match
+                if (filtered.size() == 1) {
+                    updateRemainingAmount(item.getClient().getId());
+                }
     }
 
     private void populateFields() {
@@ -201,6 +225,7 @@ public class VersmentDialog extends JDialog {
             ClientItem item = clientComboBox.getItemAt(i);
             if (item.getClient().getId() == versment.getClientId()) {
                 clientComboBox.setSelectedIndex(i);
+                updateRemainingAmount(item.getClient().getId());
                 break;
             }
         }
@@ -213,6 +238,56 @@ public class VersmentDialog extends JDialog {
         }
         
         anneeConcerneeField.setText(versment.getAnneeConcernee());
+    }
+
+    private void updateRemainingAmount(int clientId) {
+        try {
+            BigDecimal remaining = versmentController.getRemainingAmountForClient(clientId);
+            remainingAmountLabel.setText("Montant restant: " + remaining.toString() + " DA");
+            
+            // Change color based on remaining amount
+            if (remaining.compareTo(BigDecimal.ZERO) == 0) {
+                remainingAmountLabel.setForeground(new Color(244, 67, 54)); // Red - fully paid
+                remainingAmountLabel.setText("Montant restant: " + remaining.toString() + " DA (Entièrement payé)");
+            } else if (remaining.compareTo(new BigDecimal("1000")) < 0) {
+                remainingAmountLabel.setForeground(new Color(255, 152, 0)); // Orange - low remaining
+            } else {
+                remainingAmountLabel.setForeground(new Color(46, 125, 50)); // Green - good remaining
+            }
+        } catch (Exception e) {
+            remainingAmountLabel.setText("Montant restant: Erreur de calcul");
+            remainingAmountLabel.setForeground(Color.RED);
+        }
+    }
+
+    private void updateRemainingAmountPreview() {
+        Object selected = clientComboBox.getSelectedItem();
+        if (selected instanceof ClientItem) {
+            ClientItem selectedClient = (ClientItem) selected;
+            try {
+                BigDecimal currentRemaining = versmentController.getRemainingAmountForClient(selectedClient.getClient().getId());
+                String amountText = montantField.getText().trim();
+                
+                if (!amountText.isEmpty()) {
+                    BigDecimal newVersmentAmount = new BigDecimal(amountText);
+                    BigDecimal afterVersment = currentRemaining.subtract(newVersmentAmount);
+                    
+                    if (afterVersment.compareTo(BigDecimal.ZERO) < 0) {
+                        remainingAmountLabel.setText("Montant restant: " + currentRemaining.toString() + 
+                            " DA → " + afterVersment.toString() + " DA (Dépassement!)");
+                        remainingAmountLabel.setForeground(Color.RED);
+                    } else {
+                        remainingAmountLabel.setText("Montant restant: " + currentRemaining.toString() + 
+                            " DA → " + afterVersment.toString() + " DA");
+                        remainingAmountLabel.setForeground(new Color(46, 125, 50));
+                    }
+                } else {
+                    updateRemainingAmount(selectedClient.getClient().getId());
+                }
+            } catch (NumberFormatException e) {
+                updateRemainingAmount(selectedClient.getClient().getId());
+            }
+        }
     }
 
     private void validateAndClose() {
@@ -274,6 +349,30 @@ public class VersmentDialog extends JDialog {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Format de date invalide (YYYY-MM-DD)", "Validation", JOptionPane.WARNING_MESSAGE);
             return;
+        }
+
+        // Validate that versment amount doesn't exceed remaining amount (optional warning)
+        if (selected instanceof ClientItem) {
+            ClientItem selectedClient = (ClientItem) selected;
+            try {
+                BigDecimal currentRemaining = versmentController.getRemainingAmountForClient(selectedClient.getClient().getId());
+                BigDecimal versmentAmount = new BigDecimal(montantField.getText().trim());
+                
+                if (versmentAmount.compareTo(currentRemaining) > 0) {
+                    int choice = JOptionPane.showConfirmDialog(this,
+                        "Le montant du versement (" + versmentAmount + " DA) dépasse le montant restant (" + 
+                        currentRemaining + " DA).\n\nVoulez-vous continuer quand même?",
+                        "Montant dépassé",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                    
+                    if (choice != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                }
+            } catch (NumberFormatException e) {
+                // Amount validation will be handled below
+            }
         }
 
         confirmed = true;

@@ -224,7 +224,7 @@ public class VersmentPanel extends JPanel {
                 }
 
                 SwingUtilities.invokeLater(() -> {
-                    totalLabel.setText("Total: " + total[0].toString() + " DA");
+                    totalLabel.setText("Total des versements: " + total[0].toString() + " DA");
                 });
 
                 return null;
@@ -283,7 +283,9 @@ public class VersmentPanel extends JPanel {
             int result = versmentController.addVersment(newVersment);
             if (result > 0) {
                 refreshVersmentTable();
-                JOptionPane.showMessageDialog(this, "Versement ajouté avec succès!");
+                JOptionPane.showMessageDialog(this, 
+                    "Versement ajouté avec succès!\n" +
+                    "Le montant annuel du client a été mis à jour automatiquement.");
             } else {
                 JOptionPane.showMessageDialog(this, "Erreur lors de l'ajout", "Erreur", JOptionPane.ERROR_MESSAGE);
             }
@@ -310,7 +312,9 @@ public class VersmentPanel extends JPanel {
                 Versment updatedVersment = dialog.getVersment();
                 if (versmentController.updateVersment(updatedVersment)) {
                     refreshVersmentTable();
-                    JOptionPane.showMessageDialog(this, "Versement modifié avec succès!");
+                    JOptionPane.showMessageDialog(this, 
+                        "Versement modifié avec succès!\n" +
+                        "Le montant annuel du client a été ajusté automatiquement.");
                 } else {
                     JOptionPane.showMessageDialog(this, "Erreur lors de la modification", "Erreur",
                             JOptionPane.ERROR_MESSAGE);
@@ -339,7 +343,9 @@ public class VersmentPanel extends JPanel {
 
             if (versmentController.deleteVersment(versmentId)) {
                 refreshVersmentTable();
-                JOptionPane.showMessageDialog(this, "Versement supprimé avec succès!");
+                JOptionPane.showMessageDialog(this, 
+                    "Versement supprimé avec succès!\n" +
+                    "Le montant annuel du client a été restauré automatiquement.");
             } else {
                 JOptionPane.showMessageDialog(this, "Erreur lors de la suppression", "Erreur",
                         JOptionPane.ERROR_MESSAGE);

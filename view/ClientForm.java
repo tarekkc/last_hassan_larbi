@@ -14,6 +14,8 @@ import java.util.Date;
 import java.util.List;
 import com.yourcompany.clientmanagement.controller.ClientController;
 import com.yourcompany.clientmanagement.model.Client;
+import com.yourcompany.clientmanagement.controller.VersmentController;
+import java.math.BigDecimal;
 
 public class ClientForm extends JFrame {
     // Table and data components
@@ -30,6 +32,7 @@ public class ClientForm extends JFrame {
 
     // UI state
     private boolean isDarkMode = false;
+    private VersmentController versmentController;
 
     // Column index constants
     private static final int COL_ID = 0;
@@ -54,6 +57,7 @@ public class ClientForm extends JFrame {
     public ClientForm() {
         FlatLightLaf.setup();
         controller = new ClientController();
+        versmentController = new VersmentController();
 
         initializeUI();
         setupTable();
@@ -75,7 +79,7 @@ public class ClientForm extends JFrame {
                 "ID", "Nom", "Activité", "Année",
                 "Forme Juridique", "Régime Fiscal", "Régime CNAS",
                 "Recette Impôts", "Observation", "Source",
-                "Honoraires/Mois", "Montant Annual", "Téléphone",
+                "Honoraires/Mois", "Montant Annual", "Montant Restant", "Téléphone",
                 "Type", "Premier Versement", "Created At"
         };
 
@@ -89,6 +93,8 @@ public class ClientForm extends JFrame {
             public Class<?> getColumnClass(int columnIndex) {
                 if (columnIndex == COL_MONTANT)
                     return Double.class;
+                if (columnIndex == COL_MONTANT + 1) // Montant Restant column
+                    return String.class;
                 if (columnIndex == COL_SOURCE)
                     return Integer.class;
                 return String.class;
@@ -135,9 +141,13 @@ public class ClientForm extends JFrame {
         columnModel.getColumn(COL_NOM - 1).setPreferredWidth(150); // Adjust for hidden ID column
         columnModel.getColumn(COL_ACTIVITE - 1).setPreferredWidth(200);
         columnModel.getColumn(COL_ANNEE - 1).setPreferredWidth(80);
+        columnModel.getColumn(COL_MONTANT).setPreferredWidth(120); // Montant Annual
+        columnModel.getColumn(COL_MONTANT + 1).setPreferredWidth(120); // Montant Restant
 
         for (int i = COL_FORME_JURIDIQUE - 1; i < columnModel.getColumnCount(); i++) {
-            columnModel.getColumn(i).setPreferredWidth(120);
+            if (i != COL_MONTANT && i != COL_MONTANT + 1) {
+                columnModel.getColumn(i).setPreferredWidth(120);
+            }
         }
     }
 
@@ -441,11 +451,22 @@ public class ClientForm extends JFrame {
     }
 
     private Object[] convertClientToRow(Client c) {
+        // Calculate remaining amount
+        BigDecimal remainingAmount = versmentController.getRemainingAmountForClient(c.getId());
+        String remainingAmountStr = remainingAmount.toString() + " DA";
+        
+        // Add color coding info (you could use a custom renderer for this)
+        if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
+            remainingAmountStr += " ✓"; // Fully paid
+        } else if (remainingAmount.compareTo(new BigDecimal("1000")) < 0) {
+            remainingAmountStr += " ⚠"; // Low remaining
+        }
+        
         return new Object[] {
                 c.getId(), c.getNom(), c.getActivite(), c.getAnnee(),
                 c.getFormeJuridique(), c.getRegimeFiscal(), c.getRegimeCnas(),
                 c.getRecetteImpots(), c.getObservation(), c.getSource(),
-                c.getHonorairesMois(), c.getMontant(), c.getPhone(),
+                c.getHonorairesMois(), c.getMontant(), remainingAmountStr, c.getPhone(),
                 c.getType(), c.getPremierVersement(), c.getCreatedAt()
         };
     }
